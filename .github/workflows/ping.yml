@@ -1,0 +1,10 @@
+name: keep-etheria-awake
+on:
+  schedule:
+    - cron: '1 3 * * *'   # 03:01 UTC = 00:01 BRT
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Streamlit app
+        run: curl -I https://etheria.streamlit.app/ || echo "Ping failed"
