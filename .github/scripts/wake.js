@@ -1,5 +1,6 @@
 // .github/scripts/wake.js
 const { chromium } = require('playwright');
+const fs = require('fs');
 
 (async () => {
   const url = process.env.URL || 'https://etheria.streamlit.app/';
@@ -16,46 +17,65 @@ const { chromium } = require('playwright');
       const status = resp ? resp.status() : 'no-response';
       console.log('Initial response status:', status);
 
-      const html = (await page.content()).slice(0, 3000);
-      console.log('HTML snippet (first 3000 chars):\n', html);
+      // salvar snapshot inicial
+      await page.screenshot({ path: `wake_before_${attempt}.png`, fullPage: false }).catch(()=>{});
+      const htmlBefore = (await page.content()).slice(0, 10000);
+      fs.writeFileSync(`wake_before_${attempt}.html`, htmlBefore);
 
-      // procurar botão pelo texto em inglês e em português
+      // seletores possíveis (ajuste conforme necessário)
       const selectors = [
+        'button:has-text("Yes, get this app back up!")',
         'text="Yes, get this app back up!"',
-        'text="Sim, traga este app de volta!"',
         'text="Get this app back up"',
-        'text="Voltar ao app"'
+        'text="Sim, traga este app de volta!"',
+        'button'
       ];
 
       let clicked = false;
       for (const sel of selectors) {
-        const btn = page.locator(sel);
-        if (await btn.count() > 0) {
-          console.log(`Found button matching selector: ${sel}. Clicking...`);
-          try {
-            await btn.first().click({ timeout: 10000 });
-            clicked = true;
-            break;
-          } catch (err) {
-            console.log('Click attempt failed:', err.toString());
+        try {
+          console.log(`Checking selector: ${sel}`);
+          // esperar até 8s pelo seletor
+          await page.waitForSelector(sel, { timeout: 8000 }).catch(() => null);
+          const el = await page.$(sel);
+          if (el) {
+            console.log(`Found element for selector: ${sel}. Attempting click...`);
+            try {
+              await el.click({ timeout: 10000 });
+              clicked = true;
+              console.log('Click succeeded via element.click()');
+            } catch (err) {
+              console.log('Direct click failed, trying evaluate click:', err.toString());
+              try {
+                await page.evaluate(e => e.click(), el);
+                clicked = true;
+                console.log('Click succeeded via evaluate');
+              } catch (err2) {
+                console.log('Evaluate click failed:', err2.toString());
+              }
+            }
+            if (clicked) break;
+          } else {
+            console.log(`Selector ${sel} not present as element.`);
           }
+        } catch (err) {
+          console.log(`Error checking selector ${sel}:`, err.toString());
         }
       }
 
+      // screenshot e html pós-clique
+      await page.waitForTimeout(8000);
+      await page.screenshot({ path: `wake_after_${attempt}.png`, fullPage: false }).catch(()=>{});
+      const htmlAfter = (await page.content()).slice(0, 10000);
+      fs.writeFileSync(`wake_after_${attempt}.html`, htmlAfter);
+
       if (clicked) {
-        console.log('Clicked wake button, waiting for app to initialize...');
-        // aguardar um pouco para a app carregar
-        await page.waitForTimeout(10000);
-        const postHtml = (await page.content()).slice(0, 3000);
-        console.log('Post-click HTML snippet:\n', postHtml);
-        console.log('If the app is awake, you should see app content in the snippet above.');
+        console.log('Clicked wake button; check post-click HTML and screenshots for app content.');
         break;
       } else {
-        console.log('Wake button not found. Will retry after delay.');
+        console.log('Wake button not clicked this attempt. Retrying after delay...');
+        await page.waitForTimeout(8000);
       }
-
-      // esperar antes da próxima tentativa
-      await page.waitForTimeout(8000);
     }
   } catch (err) {
     console.error('Error in wake script:', err);
