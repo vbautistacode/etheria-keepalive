@@ -10,46 +10,52 @@ const { chromium } = require('playwright');
   const page = await context.newPage();
 
   try {
-    // tenta até 3 vezes: abrir, procurar botão e clicar
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 5; attempt++) {
       console.log(`Attempt ${attempt}: navigating...`);
-      const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(e => null);
       const status = resp ? resp.status() : 'no-response';
       console.log('Initial response status:', status);
 
-      // opcional: salvar um pequeno snippet do HTML para logs
-      const htmlSnippet = (await page.content()).slice(0, 1200);
-      console.log('HTML snippet (first 1200 chars):\n', htmlSnippet);
+      const html = (await page.content()).slice(0, 3000);
+      console.log('HTML snippet (first 3000 chars):\n', html);
 
-      // procurar botão pelo texto em inglês (ajuste se o texto for diferente)
-      const btn = page.locator('text="Yes, get this app back up!"');
-      const exists = await btn.count();
-      if (exists > 0) {
-        console.log('Found wake button, clicking...');
-        try {
-          await btn.first().click({ timeout: 10000 });
-          // aguardar navegação ou mudança de conteúdo
-          await page.waitForTimeout(5000);
-          console.log('Clicked button, waiting a few seconds for app to wake...');
-          // verificar se a página agora contém algo diferente (ex.: título, app content)
-          const newHtml = (await page.content()).slice(0, 1200);
-          console.log('Post-click HTML snippet:\n', newHtml);
-          console.log('Assuming wake succeeded (inspect snippets). Exiting.');
-          break;
-        } catch (err) {
-          console.log('Click failed:', err.toString());
+      // procurar botão pelo texto em inglês e em português
+      const selectors = [
+        'text="Yes, get this app back up!"',
+        'text="Sim, traga este app de volta!"',
+        'text="Get this app back up"',
+        'text="Voltar ao app"'
+      ];
+
+      let clicked = false;
+      for (const sel of selectors) {
+        const btn = page.locator(sel);
+        if (await btn.count() > 0) {
+          console.log(`Found button matching selector: ${sel}. Clicking...`);
+          try {
+            await btn.first().click({ timeout: 10000 });
+            clicked = true;
+            break;
+          } catch (err) {
+            console.log('Click attempt failed:', err.toString());
+          }
         }
-      } else {
-        console.log('Wake button not found on this page.');
       }
 
-      // se não encontrou ou não funcionou, aguarda e tenta novamente
-      if (attempt < 3) {
-        console.log('Sleeping 8s before next attempt...');
-        await page.waitForTimeout(8000);
+      if (clicked) {
+        console.log('Clicked wake button, waiting for app to initialize...');
+        // aguardar um pouco para a app carregar
+        await page.waitForTimeout(10000);
+        const postHtml = (await page.content()).slice(0, 3000);
+        console.log('Post-click HTML snippet:\n', postHtml);
+        console.log('If the app is awake, you should see app content in the snippet above.');
+        break;
       } else {
-        console.log('All attempts done; wake may have failed.');
+        console.log('Wake button not found. Will retry after delay.');
       }
+
+      // esperar antes da próxima tentativa
+      await page.waitForTimeout(8000);
     }
   } catch (err) {
     console.error('Error in wake script:', err);
