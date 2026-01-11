@@ -18,15 +18,16 @@ const fs = require('fs');
       console.log('Initial response status:', status);
 
       // salvar snapshot inicial
-      await page.screenshot({ path: `wake_before_${attempt}.png`, fullPage: false }).catch(()=>{});
+      try { await page.screenshot({ path: `wake_before_${attempt}.png`, fullPage: false }); } catch {}
       const htmlBefore = (await page.content()).slice(0, 10000);
       fs.writeFileSync(`wake_before_${attempt}.html`, htmlBefore);
 
-      // seletores possíveis (ajuste conforme necessário)
+      // seletores possíveis para o botão de wake (inglês/variações)
       const selectors = [
         'button:has-text("Yes, get this app back up!")',
         'text="Yes, get this app back up!"',
         'text="Get this app back up"',
+        'text="Get this app back up!"',
         'text="Sim, traga este app de volta!"',
         'button'
       ];
@@ -35,7 +36,6 @@ const fs = require('fs');
       for (const sel of selectors) {
         try {
           console.log(`Checking selector: ${sel}`);
-          // esperar até 8s pelo seletor
           await page.waitForSelector(sel, { timeout: 8000 }).catch(() => null);
           const el = await page.$(sel);
           if (el) {
@@ -63,9 +63,9 @@ const fs = require('fs');
         }
       }
 
-      // screenshot e html pós-clique
-      await page.waitForTimeout(8000);
-      await page.screenshot({ path: `wake_after_${attempt}.png`, fullPage: false }).catch(()=>{});
+      // aguardar e salvar pós-clique
+      await page.waitForTimeout(10000);
+      try { await page.screenshot({ path: `wake_after_${attempt}.png`, fullPage: false }); } catch {}
       const htmlAfter = (await page.content()).slice(0, 10000);
       fs.writeFileSync(`wake_after_${attempt}.html`, htmlAfter);
 
